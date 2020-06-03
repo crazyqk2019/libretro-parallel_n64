@@ -312,9 +312,9 @@ static void setup_variables(void)
       { "parallel-n64-cpucore",
 #ifdef DYNAREC
 #if defined(IOS)
-         "CPU内核; cached_interpreter|pure_interpreter|dynamic_recompiler" },
+         "CPU内核; 缓存式解释器|纯解释器|动态重编译器" },
 #else
-         "CPU内核; dynamic_recompiler|cached_interpreter|pure_interpreter" },
+         "CPU内核; 动态重编译器|缓存式解释器|纯解释器" },
 #endif
 #else
          "CPU内核; cached_interpreter|pure_interpreter" },
@@ -338,7 +338,7 @@ static void setup_variables(void)
       {"parallel-n64-pak4",
         "手柄4扩充包; 无|记忆卡|振动包"},
       { "parallel-n64-disable_expmem",
-         "启用扩充内存; enabled|disabled" },
+        "启用扩充内存; enabled|disabled" },
       { "parallel-n64-gfxplugin-accuracy",
 #if defined(IOS) || defined(ANDROID)
          "GFX精确度（须重启）; 中|高|非常高|低" },
@@ -349,7 +349,7 @@ static void setup_variables(void)
       { "parallel-n64-parallel-rdp-synchronous",
          "ParaLLEl同步RDP; enabled|disabled" },
       { "parallel-n64-parallel-rdp-interlacing",
-         "(ParaLLEl-RDP) VI隔行扫描; enabled|disabled" },
+         "(ParaLLEl-RDP) VI 隔行扫描; enabled|disabled" },
       { "parallel-n64-parallel-rdp-divot-filter",
          "(ParaLLEl-RDP) VI divot滤镜; enabled|disabled" },
       { "parallel-n64-parallel-rdp-gamma-dither",
@@ -404,12 +404,12 @@ static void setup_variables(void)
        { "parallel-n64-angrylion-overscan",
          "(Angrylion) 隐藏过扫描; disabled|enabled" },
       { "parallel-n64-virefresh",
-         "VI 刷新（超频）; 自动|1500|2200" },
+         "VI 刷新率（超频）; 自动|1500|2200" },
       { "parallel-n64-bufferswap",
          "缓存交换; disabled|enabled"
       },
       { "parallel-n64-framerate",
-         "帧率（须重启）; 原始|全速" },
+         "帧率控制（须重启）; 原始|全速" },
 
       { "parallel-n64-alt-map",
         "独立C键控制; disabled|enabled" },
@@ -419,9 +419,9 @@ static void setup_variables(void)
          "(Glide64) 顶点缓存VBO（须重启）; disabled|enabled" },
 #endif
       { "parallel-n64-boot-device",
-         "启动设备; Default|64DD IPL" },
+         "启动设备; 缺省|64DD磁盘机引导程序" },
       { "parallel-n64-64dd-hardware",
-         "64DD硬件; disabled|enabled" },
+         "启用64DD磁盘机; disabled|enabled" },
       { NULL, NULL },
    };
 

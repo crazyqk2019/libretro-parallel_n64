@@ -1,4 +1,4 @@
-/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+﻿/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
  *   Mupen64plus-core - api/config.c                                       *
  *   Mupen64Plus homepage: http://code.google.com/p/mupen64plus/           *
  *   Copyright (C) 2009 Richard Goedeken                                   *
@@ -1014,7 +1014,7 @@ EXPORT int CALL ConfigGetParamInt(m64p_handle ConfigSectionHandle, const char *P
       const value_pair Values[32];
    }   libretro_translate[] =
    {
-      { "R4300Emulator", "parallel-n64-cpucore", { { 0, "pure_interpreter" }, { 1, "cached_interpreter" }, { 2, "dynamic_recompiler" }, { 3, "neb_dynamic_recompiler" }, { 0, 0 } } },
+      { "R4300Emulator", "parallel-n64-cpucore", { { 0, "纯解释器" }, { 1, "缓存式解释器" }, { 2, "动态重编译器" }, { 3, "neb_dynamic_recompiler" }, { 0, 0 } } },
       { "ScreenWidth", "parallel-n64-screensize", { 
                                                 { 320, "320x200" },
                                                 { 320, "320x240" },
@@ -1075,8 +1075,8 @@ EXPORT int CALL ConfigGetParamInt(m64p_handle ConfigSectionHandle, const char *P
       {
          "BootDevice", "parallel-n64-boot-device",
          {
-            { 0, "Default" },
-            { 1, "64DD IPL" },
+            { 0, "缺省" },
+            { 1, "64DD磁盘机引导程序" },
          }
       }, 
       { 0, 0, { {0, 0} } }
