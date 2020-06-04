@@ -1068,8 +1068,8 @@ EXPORT int CALL ConfigGetParamInt(m64p_handle ConfigSectionHandle, const char *P
                                               } 
       },
       { "DisableExtraMem", "parallel-n64-disable_expmem", {
-                                                        { 0, "enabled" },
-                                                        { 1, "disabled" },
+                                                        { 0, "启用" },
+                                                        { 1, "禁用" },
                                                      }
       },
       {
@@ -1202,7 +1202,7 @@ EXPORT int CALL ConfigGetParamBool(m64p_handle ConfigSectionHandle, const char *
    {
       { "64DD", "parallel-n64-64dd-hardware",
          {
-            { 0, "disabled" }, { 1, "enabled" }
+            { 0, "禁用" }, { 1, "启用" }
          }
       },
       { 0, 0, { {0, 0} } }

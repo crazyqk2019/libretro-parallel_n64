@@ -338,7 +338,7 @@ static void setup_variables(void)
       {"parallel-n64-pak4",
         "手柄4扩充包; 无|记忆卡|振动包"},
       { "parallel-n64-disable_expmem",
-        "启用扩充内存; enabled|disabled" },
+        "启用扩充内存; 启用|禁用" },
       { "parallel-n64-gfxplugin-accuracy",
 #if defined(IOS) || defined(ANDROID)
          "GFX精确度（须重启）; 中|高|非常高|低" },
@@ -347,22 +347,22 @@ static void setup_variables(void)
 #endif
 #ifdef HAVE_PARALLEL
       { "parallel-n64-parallel-rdp-synchronous",
-         "ParaLLEl同步RDP; enabled|disabled" },
+         "ParaLLEl同步RDP; 启用|禁用" },
       { "parallel-n64-parallel-rdp-interlacing",
-         "(ParaLLEl-RDP) VI 隔行扫描; enabled|disabled" },
+         "(ParaLLEl-RDP) VI 隔行扫描; 启用|禁用" },
       { "parallel-n64-parallel-rdp-divot-filter",
-         "(ParaLLEl-RDP) VI divot滤镜; enabled|disabled" },
+         "(ParaLLEl-RDP) VI divot滤镜; 启用|禁用" },
       { "parallel-n64-parallel-rdp-gamma-dither",
-         "(ParaLLEl-RDP) VI 伽马抖动; enabled|disabled" },
+         "(ParaLLEl-RDP) VI 伽马抖动; 启用|禁用" },
       { "parallel-n64-parallel-rdp-vi-aa",
-         "(ParaLLEl-RDP) VI 抗锯齿; enabled|disabled" },
+         "(ParaLLEl-RDP) VI 抗锯齿; 启用|禁用" },
       { "parallel-n64-parallel-rdp-vi-bilinear",
-         "(ParaLLEl-RDP) VI 双线性过滤; enabled|disabled" },
+         "(ParaLLEl-RDP) VI 双线性过滤; 启用|禁用" },
       { "parallel-n64-parallel-rdp-dither-filter",
-         "(ParaLLEl-RDP) VI 抖动滤镜; enabled|disabled" },
+         "(ParaLLEl-RDP) VI 抖动滤镜; 启用|禁用" },
 #endif
       { "parallel-n64-send_allist_to_hle_rsp",
-         "发送音频列表到HLE RSP; disabled|enabled" },
+         "发送音频列表到HLE RSP; 禁用|启用" },
       { "parallel-n64-gfxplugin",
          "GFX插件; 自动|glide64|gln64|rice|angrylion"
 #if defined(HAVE_PARALLEL)
@@ -386,7 +386,7 @@ static void setup_variables(void)
       { "parallel-n64-filtering",
 		 "纹理过滤; 自动|N64 3点取样|双线性|最临近" },
       { "parallel-n64-dithering",
-		 "抖动; enabled|disabled" },
+		 "抖动; 启用|禁用" },
       { "parallel-n64-polyoffset-factor",
        "(Glide64) 多边形偏移量因子; -3.0|-2.5|-2.0|-1.5|-1.0|-0.5|0.0|0.5|1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0|-3.5|-4.0|-4.5|-5.0"
       },
@@ -402,26 +402,26 @@ static void setup_variables(void)
        { "parallel-n64-angrylion-multithread",
          "(Angrylion) 多线程; 全部线程|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63" },
        { "parallel-n64-angrylion-overscan",
-         "(Angrylion) 隐藏过扫描; disabled|enabled" },
+         "(Angrylion) 隐藏过扫描; 禁用|启用" },
       { "parallel-n64-virefresh",
          "VI 刷新率（超频）; 自动|1500|2200" },
       { "parallel-n64-bufferswap",
-         "缓存交换; disabled|enabled"
+         "缓存交换; 禁用|启用"
       },
       { "parallel-n64-framerate",
          "帧率控制（须重启）; 原始|全速" },
 
       { "parallel-n64-alt-map",
-        "独立C键控制; disabled|enabled" },
+        "独立C键控制; 禁用|启用" },
 
 #ifndef HAVE_PARALLEL
       { "parallel-n64-vcache-vbo",
-         "(Glide64) 顶点缓存VBO（须重启）; disabled|enabled" },
+         "(Glide64) 顶点缓存VBO（须重启）; 禁用|启用" },
 #endif
       { "parallel-n64-boot-device",
          "启动设备; 缺省|64DD磁盘机引导程序" },
       { "parallel-n64-64dd-hardware",
-         "启用64DD磁盘机; disabled|enabled" },
+         "启用64DD磁盘机; 禁用|启用" },
       { NULL, NULL },
    };
 
@@ -1094,49 +1094,49 @@ void update_variables(bool startup)
    var.key = "parallel-n64-parallel-rdp-synchronous";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-      parallel_set_synchronous_rdp(!strcmp(var.value, "enabled"));
+      parallel_set_synchronous_rdp(!strcmp(var.value, "启用"));
    else
       parallel_set_synchronous_rdp(true);
 
    var.key = "parallel-n64-parallel-rdp-interlacing";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_interlacing(!strcmp(var.value, "enabled"));
+	   parallel_set_interlacing(!strcmp(var.value, "启用"));
    else
 	   parallel_set_interlacing(true);
 
    var.key = "parallel-n64-parallel-rdp-divot-filter";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_divot_filter(!strcmp(var.value, "enabled"));
+	   parallel_set_divot_filter(!strcmp(var.value, "启用"));
    else
 	   parallel_set_divot_filter(true);
 
    var.key = "parallel-n64-parallel-rdp-gamma-dither";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_gamma_dither(!strcmp(var.value, "enabled"));
+	   parallel_set_gamma_dither(!strcmp(var.value, "启用"));
    else
 	   parallel_set_gamma_dither(true);
 
    var.key = "parallel-n64-parallel-rdp-vi-aa";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_vi_aa(!strcmp(var.value, "enabled"));
+	   parallel_set_vi_aa(!strcmp(var.value, "启用"));
    else
 	   parallel_set_vi_aa(true);
 
    var.key = "parallel-n64-parallel-rdp-vi-bilinear";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_vi_scale(!strcmp(var.value, "enabled"));
+	   parallel_set_vi_scale(!strcmp(var.value, "启用"));
    else
 	   parallel_set_vi_scale(true);
 
    var.key = "parallel-n64-parallel-rdp-dither-filter";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_dither_filter(!strcmp(var.value, "enabled"));
+	   parallel_set_dither_filter(!strcmp(var.value, "启用"));
    else
 	   parallel_set_dither_filter(true);
 #endif
@@ -1146,7 +1146,7 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if(!strcmp(var.value, "enabled"))
+      if(!strcmp(var.value, "启用"))
          send_allist_to_hle_rsp = true;
       else
          send_allist_to_hle_rsp = false;
@@ -1317,9 +1317,9 @@ void update_variables(bool startup)
 
    if (var.value)
    {
-      if(!strcmp(var.value, "enabled"))
+      if(!strcmp(var.value, "启用"))
          angrylion_set_overscan(1);
-      else if(!strcmp(var.value, "disabled"))
+      else if(!strcmp(var.value, "禁用"))
          angrylion_set_overscan(0);
    }
    else
@@ -1372,9 +1372,9 @@ void update_variables(bool startup)
    {
       static signed old_dithering = -1;
 
-      if (!strcmp(var.value, "enabled"))
+      if (!strcmp(var.value, "启用"))
          retro_dithering = 1;
-      else if (!strcmp(var.value, "disabled"))
+      else if (!strcmp(var.value, "禁用"))
          retro_dithering = 0;
 
       gfx_set_dithering();
@@ -1449,9 +1449,9 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if (!strcmp(var.value, "enabled"))
+      if (!strcmp(var.value, "启用"))
          BUFFERSWAP = true;
-      else if (!strcmp(var.value, "disabled"))
+      else if (!strcmp(var.value, "禁用"))
          BUFFERSWAP = false;
    }
 
@@ -1471,9 +1471,9 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && startup)
    {
-      if (!strcmp(var.value, "disabled"))
+      if (!strcmp(var.value, "禁用"))
          alternate_mapping = false;
-      else if (!strcmp(var.value, "enabled"))
+      else if (!strcmp(var.value, "启用"))
          alternate_mapping = true;
    }
 
