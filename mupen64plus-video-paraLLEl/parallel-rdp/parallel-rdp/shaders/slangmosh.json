@@ -103,6 +103,24 @@
 			"name": "clear_write_mask",
 			"path": "clear_write_mask.comp",
 			"compute": true
+		},
+		{
+			"name": "update_upscaled_domain_post",
+			"path": "update_upscaled_domain_post.comp",
+			"compute": true
+		},
+		{
+			"name": "update_upscaled_domain_pre",
+			"path": "update_upscaled_domain_pre.comp",
+			"compute": true
+		},
+		{
+			"name": "vi_deinterlace_vert",
+			"path": "vi_deinterlace.vert"
+		},
+		{
+			"name": "vi_deinterlace_frag",
+			"path": "vi_deinterlace.frag"
 		}
 	]
 }

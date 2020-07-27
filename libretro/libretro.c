@@ -159,9 +159,29 @@ int pad_present[4] = {1, 1, 1, 1};
 static void n64DebugCallback(void* aContext, int aLevel, const char* aMessage)
 {
     char buffer[1024];
+    if (!log_cb)
+       return;
+
     sprintf(buffer, "mupen64plus: %s\n", aMessage);
-    if (log_cb)
-       log_cb(RETRO_LOG_INFO, buffer);
+
+    switch (aLevel)
+    {
+       case M64MSG_ERROR:
+          log_cb(RETRO_LOG_ERROR, buffer);
+          break;
+       case M64MSG_INFO:
+          log_cb(RETRO_LOG_INFO, buffer);
+          break;
+       case M64MSG_WARNING:
+          log_cb(RETRO_LOG_WARN, buffer);
+          break;
+       case M64MSG_VERBOSE:
+       case M64MSG_STATUS:
+          log_cb(RETRO_LOG_DEBUG, buffer);
+          break;
+       default:
+          break;
+    }
 }
 
 extern m64p_rom_header ROM_HEADER;
@@ -348,8 +368,8 @@ static void setup_variables(void)
 #ifdef HAVE_PARALLEL
       { "parallel-n64-parallel-rdp-synchronous",
          "ParaLLEl同步RDP; 启用|禁用" },
-      { "parallel-n64-parallel-rdp-interlacing",
-         "(ParaLLEl-RDP) VI 隔行扫描; 启用|禁用" },
+      { "parallel-n64-parallel-rdp-overscan",
+         "(ParaLLEl-RDP) 切除边界像素; 0|2|4|6|8|10|12|14|16|18|20|22|24|26|28|30|32|34|36|38|40|42|44|46|48|50|52|54|56|58|60|62|64" },
       { "parallel-n64-parallel-rdp-divot-filter",
          "(ParaLLEl-RDP) VI divot滤镜; 启用|禁用" },
       { "parallel-n64-parallel-rdp-gamma-dither",
@@ -360,6 +380,14 @@ static void setup_variables(void)
          "(ParaLLEl-RDP) VI 双线性过滤; 启用|禁用" },
       { "parallel-n64-parallel-rdp-dither-filter",
          "(ParaLLEl-RDP) VI 抖动滤镜; 启用|禁用" },
+      { "parallel-n64-parallel-rdp-upscaling",
+         "(ParaLLEl-RDP) 放大倍数（须重启）; 1x|2x|4x|8x" },
+      { "parallel-n64-parallel-rdp-downscaling",
+         "(ParaLLEl-RDP) 缩小倍数; 禁用|1/2|1/4|1/8" },
+      { "parallel-n64-parallel-rdp-native-texture-lod",
+         "(ParaLLEl-RDP) 放大时使用原始贴图LOD; 禁用|启用" },
+      { "parallel-n64-parallel-rdp-native-tex-rect",
+         "(ParaLLEl-RDP) 为纹理块使用原始分辨率; 启用|禁用" },
 #endif
       { "parallel-n64-send_allist_to_hle_rsp",
          "发送音频列表到HLE RSP; 禁用|启用" },
@@ -384,9 +412,9 @@ static void setup_variables(void)
       { "parallel-n64-aspectratiohint",
          "画面宽高比（须重启）; 普通|宽屏" },
       { "parallel-n64-filtering",
-		 "纹理过滤; 自动|N64 3点取样|双线性|最临近" },
+		 "(Glide64) 纹理过滤; 自动|N64 3点取样|双线性|最临近" },
       { "parallel-n64-dithering",
-		 "抖动; 启用|禁用" },
+		 "(Angrylion) 抖动; 启用|禁用" },
       { "parallel-n64-polyoffset-factor",
        "(Glide64) 多边形偏移量因子; -3.0|-2.5|-2.0|-1.5|-1.0|-0.5|0.0|0.5|1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0|-3.5|-4.0|-4.5|-5.0"
       },
@@ -1068,6 +1096,7 @@ static void gfx_set_dithering(void)
          break;
       case GFX_ANGRYLION:
 #ifdef HAVE_THR_AL
+         angrylion_set_vi_dedither(!retro_dithering);
          angrylion_set_dithering(retro_dithering);
 #endif
          break;
@@ -1098,12 +1127,12 @@ void update_variables(bool startup)
    else
       parallel_set_synchronous_rdp(true);
 
-   var.key = "parallel-n64-parallel-rdp-interlacing";
+   var.key = "parallel-n64-parallel-rdp-overscan";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_interlacing(!strcmp(var.value, "启用"));
+	   parallel_set_overscan_crop(strtol(var.value, NULL, 0));
    else
-	   parallel_set_interlacing(true);
+	   parallel_set_overscan_crop(0);
 
    var.key = "parallel-n64-parallel-rdp-divot-filter";
    var.value = NULL;
@@ -1139,6 +1168,43 @@ void update_variables(bool startup)
 	   parallel_set_dither_filter(!strcmp(var.value, "启用"));
    else
 	   parallel_set_dither_filter(true);
+
+   var.key = "parallel-n64-parallel-rdp-upscaling";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+       parallel_set_upscaling(strtol(var.value, NULL, 0));
+   else
+       parallel_set_upscaling(1);
+
+   var.key = "parallel-n64-parallel-rdp-downscaling";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+       if (!strcmp(var.value, "禁用"))
+           parallel_set_downscaling_steps(0);
+       else if (!strcmp(var.value, "1/2"))
+           parallel_set_downscaling_steps(1);
+       else if (!strcmp(var.value, "1/4"))
+           parallel_set_downscaling_steps(2);
+       else if (!strcmp(var.value, "1/8"))
+           parallel_set_downscaling_steps(3);
+   }
+   else
+       parallel_set_downscaling_steps(0);
+
+   var.key = "parallel-n64-parallel-rdp-native-texture-lod";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+       parallel_set_native_texture_lod(!strcmp(var.value, "启用"));
+   else
+       parallel_set_native_texture_lod(false);
+
+   var.key = "parallel-n64-parallel-rdp-native-tex-rect";
+   var.value = NULL;
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+       parallel_set_native_tex_rect(!strcmp(var.value, "启用"));
+   else
+       parallel_set_native_tex_rect(true);
 #endif
 
    var.key   = "parallel-n64-send_allist_to_hle_rsp";

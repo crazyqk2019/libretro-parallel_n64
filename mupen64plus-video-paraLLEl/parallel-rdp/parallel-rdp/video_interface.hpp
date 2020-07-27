@@ -30,8 +30,22 @@ namespace RDP
 {
 struct ScanoutOptions
 {
-	bool crop_overscan = false;
+	unsigned crop_overscan_pixels = 0;
+	unsigned downscale_steps = 0;
+
+	// Works around certain game bugs. Considered a hack if enabled.
 	bool persist_frame_on_invalid_input = false;
+
+	// To be equivalent to reference behavior where
+	// pixels persist for an extra frame.
+	// Not hardware accurate, but needed for weave interlace mode.
+	bool blend_previous_frame = false;
+
+	// Upscale deinterlacing deinterlaces by upscaling in Y, with an Y coordinate offset matching the field.
+	// If disabled, weave interlacing is used.
+	// Weave deinterlacing should *not* be used, except to run test suite!
+	bool upscale_deinterlacing = true;
+
 	struct
 	{
 		bool aa = true;
@@ -43,10 +57,13 @@ struct ScanoutOptions
 	} vi;
 };
 
+class Renderer;
+
 class VideoInterface : public Vulkan::DebugChannelInterface
 {
 public:
 	void set_device(Vulkan::Device *device);
+	void set_renderer(Renderer *renderer);
 	void set_vi_register(VIRegister reg, uint32_t value);
 
 	void set_rdram(const Vulkan::Buffer *rdram, size_t offset, size_t size);
@@ -54,12 +71,13 @@ public:
 
 	int resolve_shader_define(const char *name, const char *define) const;
 
-	Vulkan::ImageHandle scanout(VkImageLayout target_layout, const ScanoutOptions &options = {});
-	void scanout_memory_range(unsigned &offset, unsigned &length);
+	Vulkan::ImageHandle scanout(VkImageLayout target_layout, const ScanoutOptions &options = {}, unsigned scale_factor = 1);
+	void scanout_memory_range(unsigned &offset, unsigned &length) const;
 	void set_shader_bank(const ShaderBank *bank);
 
 private:
 	Vulkan::Device *device = nullptr;
+	Renderer *renderer = nullptr;
 	uint32_t vi_registers[unsigned(VIRegister::Count)] = {};
 	const Vulkan::Buffer *rdram = nullptr;
 	const Vulkan::Buffer *hidden_rdram = nullptr;
@@ -86,5 +104,47 @@ private:
 	size_t rdram_offset = 0;
 	size_t rdram_size = 0;
 	bool timestamp = false;
+
+	struct Registers
+	{
+		int x_start, y_start;
+		int h_start, v_start;
+		int h_end, v_end;
+		int h_res, v_res;
+		int x_add, y_add;
+		int v_sync;
+		int vi_width;
+		int vi_offset;
+		int max_x, max_y;
+		int v_current_line;
+		bool left_clamp, right_clamp;
+		bool is_pal;
+		uint32_t status;
+	};
+	Registers decode_vi_registers() const;
+	Vulkan::ImageHandle vram_fetch_stage(const Registers &registers,
+	                                     unsigned scaling_factor) const;
+	Vulkan::ImageHandle aa_fetch_stage(Vulkan::CommandBuffer &cmd,
+	                                   Vulkan::Image &vram_image,
+	                                   const Registers &registers,
+	                                   unsigned scaling_factor) const;
+	Vulkan::ImageHandle divot_stage(Vulkan::CommandBuffer &cmd,
+	                                Vulkan::Image &aa_image,
+	                                const Registers &registers,
+	                                unsigned scaling_factor) const;
+	Vulkan::ImageHandle scale_stage(Vulkan::CommandBuffer &cmd,
+	                                Vulkan::Image &divot_image,
+	                                Registers registers,
+	                                unsigned scaling_factor,
+	                                bool degenerate,
+	                                const ScanoutOptions &options) const;
+	Vulkan::ImageHandle downscale_stage(Vulkan::CommandBuffer &cmd,
+	                                    Vulkan::Image &scale_image,
+	                                    unsigned scaling_factor,
+	                                    unsigned downscale_factor) const;
+	Vulkan::ImageHandle upscale_deinterlace(Vulkan::CommandBuffer &cmd,
+	                                        Vulkan::Image &scale_image,
+	                                        unsigned scaling_factor, bool field_select) const;
+	static bool need_fetch_bug_emulation(const Registers &reg, unsigned scaling_factor);
 };
 }
