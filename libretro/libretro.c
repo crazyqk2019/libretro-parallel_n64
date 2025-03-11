@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -78,13 +78,13 @@ struct retro_rumble_interface rumble;
 #define SUBSYSTEM_CART_DISK 0x0101
 
 static const struct retro_subsystem_rom_info n64_cart_disk[] = {
-   { "卡带", "n64|z64|v64|bin", false, false, false, NULL, 0 },
-   { "磁盘",      "ndd|bin",         false, false, false, NULL, 0 },
+   { "Cartridge", "n64|z64|v64|bin", false, false, false, NULL, 0 },
+   { "Disk",      "ndd|bin",         false, false, false, NULL, 0 },
    { NULL }
 };
 
 static const struct retro_subsystem_info subsystems[] = {
-   { "卡带和磁盘", "n64_cart_disk", n64_cart_disk, 2, SUBSYSTEM_CART_DISK},
+   { "Cartridge and Disk", "n64_cart_disk", n64_cart_disk, 2, SUBSYSTEM_CART_DISK},
    { NULL }
 };
 
@@ -103,10 +103,13 @@ float polygonOffsetUnits            = 0.0f;
 static bool vulkan_inited           = false;
 static bool gl_inited               = false;
 
-int astick_deadzone                 = 0;
-int astick_sensitivity              = 100;
-int first_time                      = 1;
-bool flip_only                      = false;
+int astick_deadzone                       = 0;
+int astick_snap_active                    = 0;
+int astick_snap_max_angle                 = 15;
+int astick_snap_min_displacement_percent  = 70;
+int astick_sensitivity                    = 100;
+int first_time                            = 1;
+bool flip_only                            = false;
 
 static uint8_t* cart_data           = NULL;
 static uint32_t cart_size           = 0;
@@ -192,7 +195,7 @@ static void core_settings_autoselect_gfx_plugin(void)
 
    environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &gfx_var);
 
-   if (gfx_var.value && strcmp(gfx_var.value, "自动") != 0)
+   if (gfx_var.value && strcmp(gfx_var.value, "auto") != 0)
       return;
 
 #if defined(HAVE_PARALLEL)
@@ -233,8 +236,9 @@ static void core_settings_set_defaults(void)
 
    if (gfx_var.value)
    {
-      if (gfx_var.value && !strcmp(gfx_var.value, "自动"))
+      if (gfx_var.value && !strcmp(gfx_var.value, "auto"))
          core_settings_autoselect_gfx_plugin();
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
 #if defined(HAVE_GLN64) || defined(HAVE_GLIDEN64)
       if (gfx_var.value && !strcmp(gfx_var.value, "gln64") && gl_inited)
          gfx_plugin = GFX_GLN64;
@@ -247,6 +251,7 @@ static void core_settings_set_defaults(void)
 #ifdef HAVE_GLIDE64
       if(gfx_var.value && !strcmp(gfx_var.value, "glide64") && gl_inited)
          gfx_plugin = GFX_GLIDE64;
+#endif
 #endif
 #ifdef HAVE_THR_AL
 	  if(gfx_var.value && !strcmp(gfx_var.value, "angrylion"))
@@ -263,13 +268,13 @@ static void core_settings_set_defaults(void)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &gfx_var) && gfx_var.value)
    {
-       if (gfx_var.value && !strcmp(gfx_var.value, "非常高"))
+       if (gfx_var.value && !strcmp(gfx_var.value, "veryhigh"))
           gfx_plugin_accuracy = 3;
-       else if (gfx_var.value && !strcmp(gfx_var.value, "高"))
+       else if (gfx_var.value && !strcmp(gfx_var.value, "high"))
           gfx_plugin_accuracy = 2;
-       else if (gfx_var.value && !strcmp(gfx_var.value, "中"))
+       else if (gfx_var.value && !strcmp(gfx_var.value, "medium"))
           gfx_plugin_accuracy = 1;
-       else if (gfx_var.value && !strcmp(gfx_var.value, "低"))
+       else if (gfx_var.value && !strcmp(gfx_var.value, "low"))
           gfx_plugin_accuracy = 0;
    }
 
@@ -277,10 +282,12 @@ static void core_settings_set_defaults(void)
 
    if (rsp_var.value)
    {
-      if (rsp_var.value && !strcmp(rsp_var.value, "自动"))
+      if (rsp_var.value && !strcmp(rsp_var.value, "auto"))
          core_settings_autoselect_rsp_plugin();
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
       if (rsp_var.value && !strcmp(rsp_var.value, "hle") && !vulkan_inited)
          rsp_plugin = RSP_HLE;
+#endif
       if (rsp_var.value && !strcmp(rsp_var.value, "cxd4"))
          rsp_plugin = RSP_CXD4;
       if (rsp_var.value && !strcmp(rsp_var.value, "parallel"))
@@ -296,7 +303,7 @@ static void core_settings_autoselect_rsp_plugin(void)
 
    environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &rsp_var);
 
-   if (rsp_var.value && strcmp(rsp_var.value, "自动") != 0)
+   if (rsp_var.value && strcmp(rsp_var.value, "auto") != 0)
       return;
 
    rsp_plugin = RSP_HLE;
@@ -332,124 +339,140 @@ static void setup_variables(void)
       { "parallel-n64-cpucore",
 #ifdef DYNAREC
 #if defined(IOS)
-         "CPU内核; 缓存式解释器|纯解释器|动态重编译器" },
+         "CPU Core; cached_interpreter|pure_interpreter|dynamic_recompiler" },
 #else
-         "CPU内核; 动态重编译器|缓存式解释器|纯解释器" },
+         "CPU Core; dynamic_recompiler|cached_interpreter|pure_interpreter" },
 #endif
 #else
-         "CPU内核; cached_interpreter|pure_interpreter" },
+         "CPU Core; cached_interpreter|pure_interpreter" },
 #endif
       {"parallel-n64-audio-buffer-size",
-         "音频缓存大小（须重启）; 2048|1024"},
+         "Audio Buffer Size (restart); 2048|1024"},
       {"parallel-n64-astick-deadzone",
-        "模拟摇杆盲区（百分比）; 15|20|25|30|0|5|10"},
+        "Analog Deadzone (percent); 15|20|25|30|0|5|10"},
       {"parallel-n64-astick-sensitivity",
-        "模拟摇杆灵敏度（百分比）; 100|105|110|115|120|125|130|135|140|145|150|200|50|55|60|65|70|75|80|85|90|95"},
+        "Analog Sensitivity (percent); 100|105|110|115|120|125|130|135|140|145|150|200|50|55|60|65|70|75|80|85|90|95"},
+      { "parallel-n64-astick-snap-angle-active",
+      "Snap Controller Angle; disabled|enabled" },
+      { "parallel-n64-astick-snap-max-angle",
+         "Maximum Snap Angle (value of 5 would mean 85 to 95 degrees are snapped to 90); 1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21" },
+      { "parallel-n64-astick-snap-min-displacement-percent",
+         "Which percentage of displacement of the stick from the center causes snap to activate (zero means always); 0|10|20|30|40|50|60|65|70|75|80|85|90|95" },
       {"parallel-n64-pak1",
 #ifdef CLASSIC
-        "手柄1扩充包; 记忆卡|振动包|无"},
+        "Player 1 Pak; memory|rumble|none"},
 #else
-        "手柄1扩充包; 无|记忆卡|振动包"},	
+        "Player 1 Pak; none|memory|rumble"},	
 #endif
       {"parallel-n64-pak2",
-        "手柄2扩充包; 无|记忆卡|振动包"},
+        "Player 2 Pak; none|memory|rumble"},
       {"parallel-n64-pak3",
-        "手柄3扩充包; 无|记忆卡|振动包"},
+        "Player 3 Pak; none|memory|rumble"},
       {"parallel-n64-pak4",
-        "手柄4扩充包; 无|记忆卡|振动包"},
+        "Player 4 Pak; none|memory|rumble"},
       { "parallel-n64-disable_expmem",
-        "启用扩充内存; 启用|禁用" },
+         "Enable Expansion Pak RAM; enabled|disabled" },
       { "parallel-n64-gfxplugin-accuracy",
 #if defined(IOS) || defined(ANDROID)
-         "GFX精确度（须重启）; 中|高|非常高|低" },
+         "GFX Accuracy (restart); medium|high|veryhigh|low" },
 #else
-         "GFX精确度（须重启）; 非常高|高|中|低" },
+         "GFX Accuracy (restart); veryhigh|high|medium|low" },
 #endif
 #ifdef HAVE_PARALLEL
       { "parallel-n64-parallel-rdp-synchronous",
-         "ParaLLEl同步RDP; 启用|禁用" },
+         "ParaLLEl Synchronous RDP; enabled|disabled" },
       { "parallel-n64-parallel-rdp-overscan",
-         "(ParaLLEl-RDP) 切除边界像素; 0|2|4|6|8|10|12|14|16|18|20|22|24|26|28|30|32|34|36|38|40|42|44|46|48|50|52|54|56|58|60|62|64" },
+         "(ParaLLEl-RDP) Crop pixel border pixels; 0|2|4|6|8|10|12|14|16|18|20|22|24|26|28|30|32|34|36|38|40|42|44|46|48|50|52|54|56|58|60|62|64" },
       { "parallel-n64-parallel-rdp-divot-filter",
-         "(ParaLLEl-RDP) VI divot滤镜; 启用|禁用" },
+         "(ParaLLEl-RDP) VI divot filter; enabled|disabled" },
       { "parallel-n64-parallel-rdp-gamma-dither",
-         "(ParaLLEl-RDP) VI 伽马抖动; 启用|禁用" },
+         "(ParaLLEl-RDP) VI gamma dither; enabled|disabled" },
       { "parallel-n64-parallel-rdp-vi-aa",
-         "(ParaLLEl-RDP) VI 抗锯齿; 启用|禁用" },
+         "(ParaLLEl-RDP) VI AA; enabled|disabled" },
       { "parallel-n64-parallel-rdp-vi-bilinear",
-         "(ParaLLEl-RDP) VI 双线性过滤; 启用|禁用" },
+         "(ParaLLEl-RDP) VI bilinear; enabled|disabled" },
       { "parallel-n64-parallel-rdp-dither-filter",
-         "(ParaLLEl-RDP) VI 抖动滤镜; 启用|禁用" },
+         "(ParaLLEl-RDP) VI dither filter; enabled|disabled" },
       { "parallel-n64-parallel-rdp-upscaling",
-         "(ParaLLEl-RDP) 放大倍数（须重启）; 1x|2x|4x|8x" },
+         "(ParaLLEl-RDP) Upscaling factor (restart); 1x|2x|4x|8x" },
       { "parallel-n64-parallel-rdp-downscaling",
-         "(ParaLLEl-RDP) 缩小倍数; 禁用|1/2|1/4|1/8" },
+         "(ParaLLEl-RDP) Downsampling; disable|1/2|1/4|1/8" },
       { "parallel-n64-parallel-rdp-native-texture-lod",
-         "(ParaLLEl-RDP) 放大时使用原始贴图LOD; 禁用|启用" },
+         "(ParaLLEl-RDP) Use native texture LOD when upscaling; disabled|enabled" },
       { "parallel-n64-parallel-rdp-native-tex-rect",
-         "(ParaLLEl-RDP) 为纹理块使用原始分辨率; 启用|禁用" },
+         "(ParaLLEl-RDP) Use native resolution for TEX_RECT; enabled|disabled" },
 #endif
       { "parallel-n64-send_allist_to_hle_rsp",
-         "发送音频列表到HLE RSP; 禁用|启用" },
+         "Send audio lists to HLE RSP; disabled|enabled" },
       { "parallel-n64-gfxplugin",
-         "GFX插件; 自动|glide64|gln64|rice|angrylion"
-#if defined(HAVE_PARALLEL)
+         "GFX Plugin; auto"
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
+         "|glide64|gln64|rice"
+#endif         
+         "|angrylion"
+#ifdef HAVE_PARALLEL
             "|parallel"
 #endif
       },
       { "parallel-n64-rspplugin",
-         "RSP插件; 自动|hle|cxd4"
+         "RSP Plugin; auto"
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
+		 "|hle"
+#endif
+		 "|cxd4"
 #ifdef HAVE_PARALLEL_RSP
          "|parallel"
 #endif
          },
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES) || defined(HAVE_PARALLEL)
       { "parallel-n64-screensize",
 #ifdef CLASSIC
-         "分辨率（须重启）; 320x240|640x480|960x720|1280x960|1440x1080|1600x1200|1920x1440|2240x1680|2880x2160|5760x4320" },
+         "Resolution (restart); 320x240|640x480|960x720|1280x960|1440x1080|1600x1200|1920x1440|2240x1680|2880x2160|5760x4320" },
 #else
-         "分辨率（须重启）; 640x480|960x720|1280x960|1440x1080|1600x1200|1920x1440|2240x1680|2880x2160|5760x4320|320x240" },	
+         "Resolution (restart); 640x480|960x720|1280x960|1440x1080|1600x1200|1920x1440|2240x1680|2880x2160|5760x4320|320x240" },	
 #endif
       { "parallel-n64-aspectratiohint",
-         "画面宽高比（须重启）; 普通|宽屏" },
+         "Aspect ratio hint (reinit); normal|widescreen" },
       { "parallel-n64-filtering",
-		 "(Glide64) 纹理过滤; 自动|N64 3点取样|双线性|最临近" },
+		 "(Glide64) Texture Filtering; automatic|N64 3-point|bilinear|nearest" },
       { "parallel-n64-dithering",
-		 "(Angrylion) 抖动; 启用|禁用" },
+		 "(Angrylion) Dithering; enabled|disabled" },
       { "parallel-n64-polyoffset-factor",
-       "(Glide64) 多边形偏移量因子; -3.0|-2.5|-2.0|-1.5|-1.0|-0.5|0.0|0.5|1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0|-3.5|-4.0|-4.5|-5.0"
+       "(Glide64) Polygon Offset Factor; -3.0|-2.5|-2.0|-1.5|-1.0|-0.5|0.0|0.5|1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0|-3.5|-4.0|-4.5|-5.0"
       },
       { "parallel-n64-polyoffset-units",
-       "(Glide64) 多边形偏移量单元; -3.0|-2.5|-2.0|-1.5|-1.0|-0.5|0.0|0.5|1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0|-3.5|-4.0|-4.5|-5.0"
+       "(Glide64) Polygon Offset Units; -3.0|-2.5|-2.0|-1.5|-1.0|-0.5|0.0|0.5|1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0|-3.5|-4.0|-4.5|-5.0"
       },
+#endif
       { "parallel-n64-angrylion-vioverlay",
-       "(Angrylion) VI 覆盖层; 全滤镜|抗锯齿+模糊|抗锯齿+消除抖动|仅抗锯齿|无滤镜|深度|范围"
+       "(Angrylion) VI Overlay; Filtered|AA+Blur|AA+Dedither|AA only|Unfiltered|Depth|Coverage"
       },
       { "parallel-n64-angrylion-sync",
-       "(Angrylion) 线程同步级别; 低|中|高"
+       "(Angrylion) Thread sync level; Low|Medium|High"
       },
        { "parallel-n64-angrylion-multithread",
-         "(Angrylion) 多线程; 全部线程|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63" },
+         "(Angrylion) Multi-threading; all threads|1|2|3|4|5|6|7|8|9|10|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63" },
        { "parallel-n64-angrylion-overscan",
-         "(Angrylion) 隐藏过扫描; 禁用|启用" },
+         "(Angrylion) Hide overscan; disabled|enabled" },
       { "parallel-n64-virefresh",
-         "VI 刷新率（超频）; 自动|1500|2200" },
+         "VI Refresh (Overclock); auto|1500|2200" },
       { "parallel-n64-bufferswap",
-         "缓存交换; 禁用|启用"
+         "Buffer Swap; disabled|enabled"
       },
       { "parallel-n64-framerate",
-         "帧率控制（须重启）; 原始|全速" },
+         "Framerate (restart); original|fullspeed" },
 
       { "parallel-n64-alt-map",
-        "独立C键控制; 禁用|启用" },
+        "Independent C-button Controls; disabled|enabled" },
 
-#ifndef HAVE_PARALLEL
+#if defined(HAVE_PARALLEL) || !defined(HAVE_OPENGL) || !defined(HAVE_OPENGLES)
       { "parallel-n64-vcache-vbo",
-         "(Glide64) 顶点缓存VBO（须重启）; 禁用|启用" },
+         "(Glide64) Vertex cache VBO (restart); disabled|enabled" },
 #endif
       { "parallel-n64-boot-device",
-         "启动设备; 缺省|64DD磁盘机引导程序" },
+         "Boot Device; Default|64DD IPL" },
       { "parallel-n64-64dd-hardware",
-         "启用64DD磁盘机; 禁用|启用" },
+         "64DD Hardware; disabled|enabled" },
       { NULL, NULL },
    };
 
@@ -652,8 +675,10 @@ bool emu_step_render(void)
          default:
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
             video_cb(RETRO_HW_FRAME_BUFFER_VALID, screen_width, screen_height, 0);
-#else
+#elif defined(HAVE_THR_AL)
             video_cb((screen_pitch == 0) ? NULL : prescale, screen_width, screen_height, screen_pitch);
+#else
+            video_cb(NULL, screen_width, screen_height, screen_pitch);
 #endif
             break;
       }
@@ -1123,7 +1148,7 @@ void update_variables(bool startup)
    var.key = "parallel-n64-parallel-rdp-synchronous";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-      parallel_set_synchronous_rdp(!strcmp(var.value, "启用"));
+      parallel_set_synchronous_rdp(!strcmp(var.value, "enabled"));
    else
       parallel_set_synchronous_rdp(true);
 
@@ -1137,35 +1162,35 @@ void update_variables(bool startup)
    var.key = "parallel-n64-parallel-rdp-divot-filter";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_divot_filter(!strcmp(var.value, "启用"));
+	   parallel_set_divot_filter(!strcmp(var.value, "enabled"));
    else
 	   parallel_set_divot_filter(true);
 
    var.key = "parallel-n64-parallel-rdp-gamma-dither";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_gamma_dither(!strcmp(var.value, "启用"));
+	   parallel_set_gamma_dither(!strcmp(var.value, "enabled"));
    else
 	   parallel_set_gamma_dither(true);
 
    var.key = "parallel-n64-parallel-rdp-vi-aa";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_vi_aa(!strcmp(var.value, "启用"));
+	   parallel_set_vi_aa(!strcmp(var.value, "enabled"));
    else
 	   parallel_set_vi_aa(true);
 
    var.key = "parallel-n64-parallel-rdp-vi-bilinear";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_vi_scale(!strcmp(var.value, "启用"));
+	   parallel_set_vi_scale(!strcmp(var.value, "enabled"));
    else
 	   parallel_set_vi_scale(true);
 
    var.key = "parallel-n64-parallel-rdp-dither-filter";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-	   parallel_set_dither_filter(!strcmp(var.value, "启用"));
+	   parallel_set_dither_filter(!strcmp(var.value, "enabled"));
    else
 	   parallel_set_dither_filter(true);
 
@@ -1180,7 +1205,7 @@ void update_variables(bool startup)
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-       if (!strcmp(var.value, "禁用"))
+       if (!strcmp(var.value, "disable"))
            parallel_set_downscaling_steps(0);
        else if (!strcmp(var.value, "1/2"))
            parallel_set_downscaling_steps(1);
@@ -1195,14 +1220,14 @@ void update_variables(bool startup)
    var.key = "parallel-n64-parallel-rdp-native-texture-lod";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-       parallel_set_native_texture_lod(!strcmp(var.value, "启用"));
+       parallel_set_native_texture_lod(!strcmp(var.value, "enabled"));
    else
        parallel_set_native_texture_lod(false);
 
    var.key = "parallel-n64-parallel-rdp-native-tex-rect";
    var.value = NULL;
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
-       parallel_set_native_tex_rect(!strcmp(var.value, "启用"));
+       parallel_set_native_tex_rect(!strcmp(var.value, "enabled"));
    else
        parallel_set_native_tex_rect(true);
 #endif
@@ -1212,7 +1237,7 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if(!strcmp(var.value, "启用"))
+      if(!strcmp(var.value, "enabled"))
          send_allist_to_hle_rsp = true;
       else
          send_allist_to_hle_rsp = false;
@@ -1259,7 +1284,8 @@ void update_variables(bool startup)
 
       if (var.value)
       {
-         if (!strcmp(var.value, "自动"))
+#if defined(HAVE_GLN64) || defined(HAVE_GLIDEN64) || defined(HAVE_RICE) || defined(HAVE_GLIDE64) || defined(HAVE_THR_AL) || defined(HAVE_PARALLEL)
+         if (!strcmp(var.value, "auto"))
 #if defined(HAVE_GLN64) || defined(HAVE_GLIDEN64)
          if (!strcmp(var.value, "gln64"))
             gfx_plugin = GFX_GLN64;
@@ -1280,11 +1306,10 @@ void update_variables(bool startup)
          if(!strcmp(var.value, "parallel"))
             gfx_plugin = GFX_PARALLEL;
 #endif
+#endif
       }
       else
-      {
          core_settings_autoselect_gfx_plugin();
-      }
    }
 
    
@@ -1296,43 +1321,43 @@ void update_variables(bool startup)
 
    if (var.value)
    {
-      if(!strcmp(var.value, "全滤镜"))
+      if(!strcmp(var.value, "Filtered"))
       {
          angrylion_set_vi(0);
          angrylion_set_vi_dedither(1);
          angrylion_set_vi_blur(1);
       }
-      else if(!strcmp(var.value, "抗锯齿+模糊"))
+      else if(!strcmp(var.value, "AA+Blur"))
       {
          angrylion_set_vi(0);
          angrylion_set_vi_dedither(0);
          angrylion_set_vi_blur(1);
       }
-      else if(!strcmp(var.value, "抗锯齿+消除抖动"))
+      else if(!strcmp(var.value, "AA+Dedither"))
       {
          angrylion_set_vi(0);
          angrylion_set_vi_dedither(1);
          angrylion_set_vi_blur(0);
       }
-      else if(!strcmp(var.value, "仅抗锯齿"))
+      else if(!strcmp(var.value, "AA only"))
       {
          angrylion_set_vi(0);
          angrylion_set_vi_dedither(0);
          angrylion_set_vi_blur(0);
       }
-      else if(!strcmp(var.value, "无滤镜"))
+      else if(!strcmp(var.value, "Unfiltered"))
       {
          angrylion_set_vi(1);
          angrylion_set_vi_dedither(1);
          angrylion_set_vi_blur(1);
       }
-      else if(!strcmp(var.value, "深度"))
+      else if(!strcmp(var.value, "Depth"))
       {
          angrylion_set_vi(2);
          angrylion_set_vi_dedither(1);
          angrylion_set_vi_blur(1);
       }
-      else if(!strcmp(var.value, "范围"))
+      else if(!strcmp(var.value, "Coverage"))
       {
          angrylion_set_vi(3);
          angrylion_set_vi_dedither(1);
@@ -1353,11 +1378,11 @@ void update_variables(bool startup)
 
    if (var.value)
    {
-      if(!strcmp(var.value, "高"))
+      if(!strcmp(var.value, "High"))
          angrylion_set_synclevel(2);
-      else if(!strcmp(var.value, "中"))
+      else if(!strcmp(var.value, "Medium"))
          angrylion_set_synclevel(1);
-      else if(!strcmp(var.value, "低"))
+      else if(!strcmp(var.value, "Low"))
          angrylion_set_synclevel(0);
    }
    else
@@ -1368,7 +1393,7 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if(!strcmp(var.value, "全部线程"))
+      if(!strcmp(var.value, "all threads"))
          angrylion_set_threads(0);
       else
          angrylion_set_threads(atoi(var.value));
@@ -1383,9 +1408,9 @@ void update_variables(bool startup)
 
    if (var.value)
    {
-      if(!strcmp(var.value, "启用"))
+      if(!strcmp(var.value, "enabled"))
          angrylion_set_overscan(1);
-      else if(!strcmp(var.value, "禁用"))
+      else if(!strcmp(var.value, "disabled"))
          angrylion_set_overscan(0);
    }
    else
@@ -1412,17 +1437,17 @@ void update_variables(bool startup)
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
       static signed old_filtering = -1;
-      if (!strcmp(var.value, "自动"))
+      if (!strcmp(var.value, "automatic"))
          retro_filtering = 0;
-      else if (!strcmp(var.value, "N64 3点取样"))
+      else if (!strcmp(var.value, "N64 3-point"))
 #ifdef DISABLE_3POINT
          retro_filtering = 3;
 #else
          retro_filtering = 1;
 #endif
-      else if (!strcmp(var.value, "最临近"))
+      else if (!strcmp(var.value, "nearest"))
          retro_filtering = 2;
-      else if (!strcmp(var.value, "双线性"))
+      else if (!strcmp(var.value, "bilinear"))
          retro_filtering = 3;
 
       if (retro_filtering != old_filtering)
@@ -1438,9 +1463,9 @@ void update_variables(bool startup)
    {
       static signed old_dithering = -1;
 
-      if (!strcmp(var.value, "启用"))
+      if (!strcmp(var.value, "enabled"))
          retro_dithering = 1;
-      else if (!strcmp(var.value, "禁用"))
+      else if (!strcmp(var.value, "disabled"))
          retro_dithering = 0;
 
       gfx_set_dithering();
@@ -1477,6 +1502,33 @@ void update_variables(bool startup)
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
       astick_deadzone = (int)(atoi(var.value) * 0.01f * 0x8000);
 
+   var.key = "parallel-n64-astick-snap-angle-active";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      if (!strcmp(var.value, "enabled"))
+         astick_snap_active = 1;
+      else if (!strcmp(var.value, "disabled"))
+         astick_snap_active = 0;
+   }
+
+   var.key = "parallel-n64-astick-snap-angle";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      astick_snap_max_angle = (int)(atoi(var.value));
+   }
+
+   var.key = "parallel-n64-astick-snap-min-displacement-percent";
+   var.value = NULL;
+
+   if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
+   {
+      astick_snap_min_displacement_percent = (int)(atoi(var.value));
+   }
+
    var.key = "parallel-n64-astick-sensitivity";
    var.value = NULL;
 
@@ -1488,13 +1540,13 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-       if (var.value && !strcmp(var.value, "非常高"))
+       if (var.value && !strcmp(var.value, "veryhigh"))
           gfx_plugin_accuracy = 3;
-       else if (var.value && !strcmp(var.value, "高"))
+       else if (var.value && !strcmp(var.value, "high"))
           gfx_plugin_accuracy = 2;
-       else if (var.value && !strcmp(var.value, "中"))
+       else if (var.value && !strcmp(var.value, "medium"))
           gfx_plugin_accuracy = 1;
-       else if (var.value && !strcmp(var.value, "低"))
+       else if (var.value && !strcmp(var.value, "low"))
           gfx_plugin_accuracy = 0;
    }
 
@@ -1503,7 +1555,7 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if (!strcmp(var.value, "自动")) { }
+      if (!strcmp(var.value, "auto")) { }
       else if (!strcmp(var.value, "1500"))
          g_vi_refresh_rate = 1500;
       else if (!strcmp(var.value, "2200"))
@@ -1515,9 +1567,9 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
    {
-      if (!strcmp(var.value, "启用"))
+      if (!strcmp(var.value, "enabled"))
          BUFFERSWAP = true;
-      else if (!strcmp(var.value, "禁用"))
+      else if (!strcmp(var.value, "disabled"))
          BUFFERSWAP = false;
    }
 
@@ -1526,9 +1578,9 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && initial_boot)
    {
-      if (!strcmp(var.value, "原始"))
+      if (!strcmp(var.value, "original"))
          frame_dupe = false;
-      else if (!strcmp(var.value, "全速"))
+      else if (!strcmp(var.value, "fullspeed"))
          frame_dupe = true;
    }
 
@@ -1537,9 +1589,9 @@ void update_variables(bool startup)
 
    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && startup)
    {
-      if (!strcmp(var.value, "禁用"))
+      if (!strcmp(var.value, "disabled"))
          alternate_mapping = false;
-      else if (!strcmp(var.value, "启用"))
+      else if (!strcmp(var.value, "enabled"))
          alternate_mapping = true;
    }
 
@@ -1549,9 +1601,9 @@ void update_variables(bool startup)
       if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &pk1var) && pk1var.value)
       {
          int p1_pak = PLUGIN_NONE;
-         if (!strcmp(pk1var.value, "振动包"))
+         if (!strcmp(pk1var.value, "rumble"))
             p1_pak = PLUGIN_RAW;
-         else if (!strcmp(pk1var.value, "记忆卡"))
+         else if (!strcmp(pk1var.value, "memory"))
             p1_pak = PLUGIN_MEMPAK;
 
          /* If controller struct is not initialised yet, set pad_pak_types instead
@@ -1569,9 +1621,9 @@ void update_variables(bool startup)
       if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &pk2var) && pk2var.value)
       {
          int p2_pak = PLUGIN_NONE;
-         if (!strcmp(pk2var.value, "振动包"))
+         if (!strcmp(pk2var.value, "rumble"))
             p2_pak = PLUGIN_RAW;
-         else if (!strcmp(pk2var.value, "记忆卡"))
+         else if (!strcmp(pk2var.value, "memory"))
             p2_pak = PLUGIN_MEMPAK;
 
          if (controller[1].control)
@@ -1587,9 +1639,9 @@ void update_variables(bool startup)
       if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &pk3var) && pk3var.value)
       {
          int p3_pak = PLUGIN_NONE;
-         if (!strcmp(pk3var.value, "振动包"))
+         if (!strcmp(pk3var.value, "rumble"))
             p3_pak = PLUGIN_RAW;
-         else if (!strcmp(pk3var.value, "记忆卡"))
+         else if (!strcmp(pk3var.value, "memory"))
             p3_pak = PLUGIN_MEMPAK;
 
          if (controller[2].control)
@@ -1605,9 +1657,9 @@ void update_variables(bool startup)
       if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &pk4var) && pk4var.value)
       {
          int p4_pak = PLUGIN_NONE;
-         if (!strcmp(pk4var.value, "振动包"))
+         if (!strcmp(pk4var.value, "rumble"))
             p4_pak = PLUGIN_RAW;
-         else if (!strcmp(pk4var.value, "记忆卡"))
+         else if (!strcmp(pk4var.value, "memory"))
             p4_pak = PLUGIN_MEMPAK;
 
          if (controller[3].control)
@@ -1820,12 +1872,12 @@ void retro_run (void)
          float aspect_val = 4.0 / 3.0;
          float aspectmode = 0;
 
-         if (!strcmp(var.value, "宽屏"))
+         if (!strcmp(var.value, "widescreen"))
          {
             aspect_val = 16.0 / 9.0;
             aspectmode = 1;
          }
-         else if (!strcmp(var.value, "普通"))
+         else if (!strcmp(var.value, "normal"))
          {
             aspect_val = 4.0 / 3.0;
             aspectmode = 0;
@@ -2077,14 +2129,20 @@ void retro_cheat_set(unsigned index, bool enabled, const char* codeLine)
       {
          if (matchLength)
          {
-            char *codePartS = (char*)calloc(matchLength, sizeof(*codePartS));
+            char *codePartS = (char*)calloc(matchLength + 1, sizeof(*codePartS));
+            if (codePartS == NULL)
+            {
+               log_cb(RETRO_LOG_ERROR, "Unable to calloc memory in retro_cheat_set. Cheat will not be applied\n");
+            }
+            else 
+            {
+               strncpy(codePartS,codeLine+cursor-matchLength,matchLength);
+               codePartS[matchLength]=0;
+               codeParts[partCount++]=strtoul(codePartS,NULL,16);
+               matchLength=0;
 
-            strncpy(codePartS,codeLine+cursor-matchLength,matchLength);
-            codePartS[matchLength]=0;
-            codeParts[partCount++]=strtoul(codePartS,NULL,16);
-            matchLength=0;
-
-            free(codePartS);
+               free(codePartS);
+            }
          }
       }
       if (!codeLine[cursor])
